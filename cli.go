@@ -97,6 +97,7 @@ func main() {
 
 	portableDir := strings.TrimSpace(*portableDirFlag)
 	portableBrowser := strings.TrimSpace(*portableBrowserFlag)
+	portableBrowserProvided := portableBrowser != ""
 
 	install, uninstall, update, installOpenAsar, uninstallOpenAsar := *installFlag, *uninstallFlag, *updateFlag, *installOpenAsarFlag, *uninstallOpenAsarFlag
 	switches := []*bool{&install, &update, &uninstall, &installOpenAsar, &uninstallOpenAsar}
@@ -152,11 +153,12 @@ func main() {
 			if portableDir == "" && promptConfirm("Would you like to create or target a portable Discord install?") {
 				portableDir = promptForPath("Portable Discord location")
 			}
-			if portableBrowser == "" && promptConfirm("Would you like to set a portable browser executable for external links?") {
+			if !portableBrowserProvided && promptConfirm("Would you like to set a portable browser executable for external links?") {
 				portableBrowser = promptForPath("Browser executable path")
+				portableBrowserProvided = true
 			}
 		}
-		discord = mustSetupPortable(discord, PortableOptions{TargetDir: portableDir, BrowserPath: portableBrowser})
+		discord = mustSetupPortable(discord, PortableOptions{TargetDir: portableDir, BrowserPath: portableBrowser, BrowserProvided: portableBrowserProvided})
 		errSilent = discord.patch()
 	} else if uninstall {
 		errSilent = PromptDiscord("unpatch", *locationFlag, *branchFlag).unpatch()
@@ -166,11 +168,12 @@ func main() {
 			if portableDir == "" && promptConfirm("Repair a portable Discord install?") {
 				portableDir = promptForPath("Portable Discord location")
 			}
-			if portableBrowser == "" && promptConfirm("Update the portable browser executable?") {
+			if !portableBrowserProvided && promptConfirm("Update the portable browser executable?") {
 				portableBrowser = promptForPath("Browser executable path")
+				portableBrowserProvided = true
 			}
 		}
-		discord = mustSetupPortable(discord, PortableOptions{TargetDir: portableDir, BrowserPath: portableBrowser})
+		discord = mustSetupPortable(discord, PortableOptions{TargetDir: portableDir, BrowserPath: portableBrowser, BrowserProvided: portableBrowserProvided})
 		Log.Info("Downloading latest Vencord files...")
 		err = installLatestBuilds()
 		Log.Info("Done!")

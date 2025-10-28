@@ -12,8 +12,9 @@ import (
 )
 
 type PortableOptions struct {
-	TargetDir   string
-	BrowserPath string
+	TargetDir       string
+	BrowserPath     string
+	BrowserProvided bool
 }
 
 type portableConfig struct {
@@ -28,8 +29,10 @@ func SetupPortableEnvironment(source *DiscordInstall, opts PortableOptions) (*Di
 		if err := ensureBaseDirExists(); err != nil {
 			return nil, err
 		}
-		if err := WritePortableConfig(opts.BrowserPath); err != nil {
-			return nil, err
+		if opts.BrowserProvided {
+			if err := WritePortableConfig(opts.BrowserPath); err != nil {
+				return nil, err
+			}
 		}
 		return source, nil
 	}
@@ -48,8 +51,10 @@ func SetupPortableEnvironment(source *DiscordInstall, opts PortableOptions) (*Di
 		if err := ensureBaseDirExists(); err != nil {
 			return nil, err
 		}
-		if err := WritePortableConfig(opts.BrowserPath); err != nil {
-			return nil, err
+		if opts.BrowserProvided {
+			if err := WritePortableConfig(opts.BrowserPath); err != nil {
+				return nil, err
+			}
 		}
 		return source, nil
 	}
@@ -72,8 +77,10 @@ func SetupPortableEnvironment(source *DiscordInstall, opts PortableOptions) (*Di
 	if err := ensureBaseDirExists(); err != nil {
 		return nil, err
 	}
-	if err := WritePortableConfig(opts.BrowserPath); err != nil {
-		return nil, err
+	if opts.BrowserProvided {
+		if err := WritePortableConfig(opts.BrowserPath); err != nil {
+			return nil, err
+		}
 	}
 
 	return cloned, nil
