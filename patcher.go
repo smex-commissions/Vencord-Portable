@@ -17,9 +17,18 @@ import (
 
 var BaseDir string
 var VencordDirectory string
+var PortableConfigPath string
+
+const portableConfigFileName = "portable-config.json"
 
 func init() {
-	if dir := os.Getenv("VENCORD_USER_DATA_DIR"); dir != "" {
+	ConfigureBaseDirs("", "")
+}
+
+func ConfigureBaseDirs(baseDirOverride, vencordDirectoryOverride string) {
+	if baseDirOverride != "" {
+		BaseDir = baseDirOverride
+	} else if dir := os.Getenv("VENCORD_USER_DATA_DIR"); dir != "" {
 		Log.Debug("Using VENCORD_USER_DATA_DIR")
 		BaseDir = dir
 	} else if dir = os.Getenv("DISCORD_USER_DATA_DIR"); dir != "" {
@@ -30,12 +39,16 @@ func init() {
 		BaseDir = appdir.New("Vencord").UserConfig()
 	}
 
-	if dir := os.Getenv("VENCORD_DIRECTORY"); dir != "" {
+	if vencordDirectoryOverride != "" {
+		VencordDirectory = vencordDirectoryOverride
+	} else if dir := os.Getenv("VENCORD_DIRECTORY"); dir != "" {
 		Log.Debug("Using VENCORD_DIRECTORY")
 		VencordDirectory = dir
 	} else {
 		VencordDirectory = path.Join(BaseDir, "vencord.asar")
 	}
+
+	PortableConfigPath = path.Join(BaseDir, portableConfigFileName)
 }
 
 type DiscordInstall struct {
@@ -87,7 +100,7 @@ func patchAppAsar(dir string, isSystemElectron bool) (err error) {
 	}
 
 	Log.Debug("Writing custom app.asar to", appAsar)
-	if err := WriteAppAsar(appAsar, VencordDirectory); err != nil {
+	if err := WriteAppAsar(appAsar, VencordDirectory, PortableConfigPath); err != nil {
 		return err
 	}
 

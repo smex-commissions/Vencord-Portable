@@ -21,7 +21,7 @@ type asarEntry struct {
 
 // Ported from https://github.com/GeopJr/asar-cr/blob/cd7695b7c913bf921d9fb6600eaeb1400e3ba225/src/asar-cr/pack.cr#L61
 
-func WriteAppAsar(outFile string, vencordAsarPath string) error {
+func WriteAppAsar(outFile string, vencordAsarPath string, configPath string) error {
 	header := make(map[string]map[string]asarEntry)
 	files := make(map[string]asarEntry)
 	header["files"] = files
@@ -29,7 +29,51 @@ func WriteAppAsar(outFile string, vencordAsarPath string) error {
 	fileContents := ""
 
 	patcherPathB, _ := json.Marshal(vencordAsarPath)
-	indexJsContents := "require(" + string(patcherPathB) + ")"
+	indexBuilder := &strings.Builder{}
+	indexBuilder.WriteString("\"use strict\";\n")
+
+	if configPath != "" {
+		configPathB, _ := json.Marshal(configPath)
+		indexBuilder.WriteString("const fs = require(\"fs\");\n")
+		indexBuilder.WriteString("const childProcess = require(\"child_process\");\n")
+		indexBuilder.WriteString("const { shell } = require(\"electron\");\n")
+		indexBuilder.WriteString("const originalOpenExternal = shell.openExternal.bind(shell);\n")
+		indexBuilder.WriteString("let portableBrowserPath = \"\";\n")
+		indexBuilder.WriteString("try {\n")
+		indexBuilder.WriteString("        const rawConfig = fs.readFileSync(" + string(configPathB) + ", \"utf8\");\n")
+		indexBuilder.WriteString("        const parsedConfig = JSON.parse(rawConfig);\n")
+		indexBuilder.WriteString("        if (parsedConfig && typeof parsedConfig.browserPath === \"string\" && parsedConfig.browserPath.length > 0) {\n")
+		indexBuilder.WriteString("                portableBrowserPath = parsedConfig.browserPath;\n")
+		indexBuilder.WriteString("        }\n")
+		indexBuilder.WriteString("} catch (error) {\n")
+		indexBuilder.WriteString("        if (error && error.code !== \"ENOENT\") {\n")
+		indexBuilder.WriteString("                console.error(\"Failed to load portable browser configuration:\", error);\n")
+		indexBuilder.WriteString("        }\n")
+		indexBuilder.WriteString("}\n")
+		indexBuilder.WriteString("if (portableBrowserPath) {\n")
+		indexBuilder.WriteString("        shell.openExternal = (target, options) => {\n")
+		indexBuilder.WriteString("                return new Promise((resolve) => {\n")
+		indexBuilder.WriteString("                        try {\n")
+		indexBuilder.WriteString("                                const child = childProcess.spawn(portableBrowserPath, [String(target ?? \"\")], {\n")
+		indexBuilder.WriteString("                                        detached: true,\n")
+		indexBuilder.WriteString("                                        stdio: \"ignore\",\n")
+		indexBuilder.WriteString("                                });\n")
+		indexBuilder.WriteString("                                child.once(\"error\", (spawnError) => {\n")
+		indexBuilder.WriteString("                                        console.error(\"Portable browser launch error:\", spawnError);\n")
+		indexBuilder.WriteString("                                        resolve(originalOpenExternal(target, options));\n")
+		indexBuilder.WriteString("                                });\n")
+		indexBuilder.WriteString("                                child.unref();\n")
+		indexBuilder.WriteString("                                resolve(true);\n")
+		indexBuilder.WriteString("                        } catch (launchError) {\n")
+		indexBuilder.WriteString("                                console.error(\"Failed to launch portable browser:\", launchError);\n")
+		indexBuilder.WriteString("                                resolve(originalOpenExternal(target, options));\n")
+		indexBuilder.WriteString("                        }\n")
+		indexBuilder.WriteString("                });\n")
+		indexBuilder.WriteString("        };\n")
+		indexBuilder.WriteString("}\n")
+	}
+	indexBuilder.WriteString("require(" + string(patcherPathB) + ")\n")
+	indexJsContents := indexBuilder.String()
 	indexJsBytes := len([]byte(indexJsContents))
 	fileContents += indexJsContents
 	files["index.js"] = asarEntry{

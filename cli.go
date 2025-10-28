@@ -54,6 +54,8 @@ func main() {
 	var uninstallOpenAsarFlag = flag.Bool("uninstall-openasar", false, "Uninstall OpenAsar")
 	var locationFlag = flag.String("location", "", "The location of the Discord install to modify")
 	var branchFlag = flag.String("branch", "", "The branch of Discord to modify [auto|stable|ptb|canary]")
+	var portableDirFlag = flag.String("portable-dir", "", "Clone the selected Discord install into this directory and configure it as portable")
+	var portableBrowserFlag = flag.String("portable-browser", "", "Executable to launch when Discord opens external links")
 	flag.Parse()
 
 	if *helpFlag {
@@ -92,6 +94,9 @@ func main() {
 			die("Not " + Ternary(*installFlag, "installing", "updating") + " as fetching release data failed")
 		}
 	}
+
+	portableDir := strings.TrimSpace(*portableDirFlag)
+	portableBrowser := strings.TrimSpace(*portableBrowserFlag)
 
 	install, uninstall, update, installOpenAsar, uninstallOpenAsar := *installFlag, *uninstallFlag, *updateFlag, *installOpenAsarFlag, *uninstallOpenAsarFlag
 	switches := []*bool{&install, &update, &uninstall, &installOpenAsar, &uninstallOpenAsar}
@@ -142,15 +147,35 @@ func main() {
 	var err error
 	var errSilent error
 	if install {
-		errSilent = PromptDiscord("patch", *locationFlag, *branchFlag).patch()
+		discord := PromptDiscord("patch", *locationFlag, *branchFlag)
+		if interactive {
+			if portableDir == "" && promptConfirm("Would you like to create or target a portable Discord install?") {
+				portableDir = promptForPath("Portable Discord location")
+			}
+			if portableBrowser == "" && promptConfirm("Would you like to set a portable browser executable for external links?") {
+				portableBrowser = promptForPath("Browser executable path")
+			}
+		}
+		discord = mustSetupPortable(discord, PortableOptions{TargetDir: portableDir, BrowserPath: portableBrowser})
+		errSilent = discord.patch()
 	} else if uninstall {
 		errSilent = PromptDiscord("unpatch", *locationFlag, *branchFlag).unpatch()
 	} else if update {
+		discord := PromptDiscord("repair", *locationFlag, *branchFlag)
+		if interactive {
+			if portableDir == "" && promptConfirm("Repair a portable Discord install?") {
+				portableDir = promptForPath("Portable Discord location")
+			}
+			if portableBrowser == "" && promptConfirm("Update the portable browser executable?") {
+				portableBrowser = promptForPath("Browser executable path")
+			}
+		}
+		discord = mustSetupPortable(discord, PortableOptions{TargetDir: portableDir, BrowserPath: portableBrowser})
 		Log.Info("Downloading latest Vencord files...")
-		err := installLatestBuilds()
+		err = installLatestBuilds()
 		Log.Info("Done!")
 		if err == nil {
-			errSilent = PromptDiscord("repair", *locationFlag, *branchFlag).patch()
+			errSilent = discord.patch()
 		}
 	} else if installOpenAsar {
 		discord := PromptDiscord("patch", *locationFlag, *branchFlag)
@@ -204,6 +229,36 @@ func handlePromptError(err error) {
 	}
 
 	Log.FatalIfErr(err)
+}
+
+func mustSetupPortable(discord *DiscordInstall, opts PortableOptions) *DiscordInstall {
+	newInstall, err := SetupPortableEnvironment(discord, opts)
+	if err != nil {
+		die(err.Error())
+	}
+	return newInstall
+}
+
+func promptConfirm(label string) bool {
+	items := []string{"No", "Yes"}
+	_, choice, err := (&promptui.Select{
+		Label: label,
+		Items: items,
+	}).Run()
+	handlePromptError(err)
+	return choice == "Yes"
+}
+
+func promptForPath(label string) string {
+	for {
+		value, err := (&promptui.Prompt{Label: label}).Run()
+		handlePromptError(err)
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+		Log.Error("Value cannot be empty")
+	}
 }
 
 func PromptDiscord(action, dir, branch string) *DiscordInstall {
